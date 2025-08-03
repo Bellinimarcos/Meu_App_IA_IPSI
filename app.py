@@ -160,11 +160,14 @@ def analisar_respostas(respostas_do_usuario, questionario):
 # --- FUNÇÃO PARA GUARDAR AS RESPOSTAS NO GOOGLE SHEETS (VERSÃO CORRIGIDA E FINAL) ---
 def salvar_respostas_no_sheets(respostas_do_usuario, pontuacao_total):
     try:
+        # Tenta ler a chave gcp_service_account do secrets.toml
         creds = Credentials.from_service_account_info(
             st.secrets["gcp_service_account"],
             scopes=['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
         )
         client = gspread.authorize(creds)
+        
+        # Tenta ler a chave spreadsheet_id do secrets.toml
         spreadsheet = client.open_by_key(st.secrets["spreadsheet_id"])
         
         try:
@@ -226,3 +229,4 @@ if st.button("Obter Análise e Guardar Respostas"):
     pontuacao = analisar_respostas(st.session_state.respostas, questionario)
     if pontuacao is not None:
         salvar_respostas_no_sheets(st.session_state.respostas, pontuacao)
+
