@@ -1,220 +1,228 @@
 import streamlit as st
+import pandas as pd
 import gspread
 from google.oauth2.service_account import Credentials
 from datetime import datetime
+import json
 import traceback
 
-# ========== CONFIGURAÇÃO MANUAL DAS CREDENCIAIS ==========
-SERVICE_ACCOUNT_INFO = {
-    "type": "service_account",
-    "project_id": "ipsi-questionario",
-    "private_key_id": "8dff3072ce600f724d7fdf895291e37dae40c0b9",
-    "private_key": """
------BEGIN PRIVATE KEY-----
-MIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQC1ArtlhWyjt00P
-9QCI4h84Pk+3v6f15nk9o43pDXYTgbWgesrN7uuSRtEx7KgDx2HC37X+NgGjZx2O
-KvoUfzJc1l9SF9nk7RWqxUbfHIMSmpvHt/9YQVD2Tmksdr0OesvzNmiVGJ2gFiwM
-w2N1VbTNcsIQIUQMvJP4UnkCYz20jQBp3oYOy4RO44HWy5FHS3SsW+Z69rrJ8J6G
-1Wqk4KcDasGM1ULNpvxYDCGergVgKl2IP3Kfz4DWmmZyz1B4qotlr21kjA+ureub
-Qr7xh+bqtManmU9GvAHocfsCKgZ+9aduhkw9KUy5DuNRdN2Vd8JjJNzikQ2cDs8P
-LFEBPjJvAgMBAAECggEAG3DHwPBfqQKzmNzZpmav40JgVROlyPDrZgKX6QHZ6cN1
-qdeY9sF8Doepf18y6f5oCHdf6yL7z5jlEaAxRjncLtfEHo6wFnTcnoVb+kcjwFvA
-4Z+NWFnv208awZtZ4MqRMD80zo7V7Sa/VHYAa2bBSziqSRtfP2u30OLhJmauEY3h
-arOm4AHkL5ULC8ASM84GnwtPO0iBxUUDDMXMcrtt1Ti6LQBnZTv1ohRtFWURkiLm
-zwxSwwwW7Jil8AQdFPJYXPMYkVhvOVSPuTC7i9IketUqXRBf5bMnfma75IzIt0dE
-NyzHdywBNL1BN5ALNOyZQaAHlB6DvbUbqacLOI02zQKBgQD2VxyAh5mBiBEEPXfm
-BcaZNUgd6tU2WiXlTFJPqiJHN1/VrtR8dcTGQqtuCDnZNICLt/kvqNL7JMpd2Glp
-Ec8xioJTS4Byy41dVG3IOX0Oxo3owoFdakoOcEpagWzMmlRJt3OZIlCzmU5gCZqh
-gTcoaKCLhZsiV7YKKjZDBLHBOwKBgQC8G88Xk/+/SgN6pTTr54WKwbI3zSHw6/gM
-VB2YPJPNEj05wDXADXWQR7MDs70J0nRIBolWj0cgkAweAcuvgL3h96MPDLCj9S65
-7IPj4/HO4x7g05DYRKm27aAPFEXBL4o4BPm/y+EhU6KOMYTDQQB5usmeC91wipZc
-KoJ761EAXQKBgQCChT1QzIgFHbcGbBsvAThszNJdJ6O4nKMfjwS9uQNYgHqCmZN0
-LmIIOiLitfEQqMTDQsMBAY5oCuI+Pv/677i8IwtSXtq7+CX6oVVZlTwxq/pcrVIl
-0L9UTyLWOWUQM2UdedoB9TCVOFFSiUQo9nHnMyh9RFkiJR8K27rMX5xfKQKBgDCM
-NMxvA+hIn9E9ZgUkQZDoIKjKJmJZZDE6XFD4AWVBuc93zed9EcRk3MytzLIGQMB9
-/1/5pm++/YGZEQqAfYEeOlUd/1CxbJfLdNaR88xjTYrUz2MhhXOSrGZ34vDS5idD
-EXnwkm/Zd/Ce0xbZZdgE3xgNE9+BxQCQcBCvUL55AoGBAOvh3TVrJ5Uilfj8L5Sl
-g76S8LszvN5s/R/SybCpadDadX0jpvAIFtZWvgfLTB9yyv4ulQhgngoYTOfYG7V+
-Q/eFB1cfcNp7X9Mn3ts51zpJWMb+tAL8TdJgxJdMpv5NFKykIM23T8Oc3DA7H/+N
-JsLpbJ+WP3twngZGYBKaMs0s
------END PRIVATE KEY-----
-""",
-    "client_email": "planilha-ia-ipsi@ipsi-questionario.iam.gserviceaccount.com",
-    "client_id": "107276742723863349608",
-    "auth_uri": "https://accounts.google.com/o/oauth2/auth",
-    "token_uri": "https://oauth2.googleapis.com/token",
-    "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
-    "client_x509_cert_url": "https://www.googleapis.com/robot/v1/metadata/x509/planilha-ia-ipsi%40ipsi-questionario.iam.gserviceaccount.com",
-    "universe_domain": "googleapis.com"
+# --- DEFINIÇÃO DO QUESTIONÁRIO E DA ESCALA DE LIKERT ---
+questionario = [
+    {
+        "id": "q1",
+        "pergunta": "Com que frequência você se sente ansioso(a) ou preocupado(a) em relação às suas responsabilidades, prazos ou tarefas no trabalho?",
+        "tipo": "likert"
+    },
+    {
+        "id": "q2",
+        "pergunta": "Você se sente sobrecarregado(a) pela pressão ou volume de tarefas que precisa realizar no trabalho?",
+        "tipo": "likert"
+    },
+    {
+        "id": "q3",
+        "pergunta": "Você tem dificuldade em gerenciar suas tarefas ou tempo devido à ansiedade?",
+        "tipo": "likert"
+    },
+    {
+        "id": "q4",
+        "pergunta": "Você se preocupa com a possibilidade de cometer erros no trabalho?",
+        "tipo": "likert"
+    },
+    {
+        "id": "q5",
+        "pergunta": "Você costuma levar trabalho para casa (física ou mentalmente) devido à ansiedade ou preocupações?",
+        "tipo": "likert"
+    },
+    {
+        "id": "q6",
+        "pergunta": "Quando você sente ansiedade, ela costuma ser muito intensa?",
+        "tipo": "likert"
+    },
+    {
+        "id": "q7",
+        "pergunta": "Você experimenta sintomas físicos de ansiedade, como batimentos cardíacos acelerados, sudorese, tremores, tensão muscular ou dores?",
+        "tipo": "likert"
+    },
+    {
+        "id": "q8",
+        "pergunta": "Você tem dificuldade em se concentrar devido à ansiedade?",
+        "tipo": "likert"
+    },
+    {
+        "id": "q9",
+        "pergunta": "Você se sente irritado(a) ou impaciente quando está ansioso(a)?",
+        "tipo": "likert"
+    },
+    {
+        "id": "q10",
+        "pergunta": "Você tem dificuldade em controlar seus pensamentos ansiosos ou preocupações?",
+        "tipo": "likert"
+    },
+    {
+        "id": "q11",
+        "pergunta": "Você tem dificuldade para dormir ou manter o sono devido a preocupações (gerais ou relacionadas ao trabalho)?",
+        "tipo": "likert"
+    },
+    {
+        "id": "q12",
+        "pergunta": "Você se sente ansioso(a) ao interagir com colegas, superiores ou antes de reuniões/apresentações no trabalho?",
+        "tipo": "likert"
+    },
+    {
+        "id": "q13",
+        "pergunta": "Você evita situações sociais no trabalho devido à ansiedade?",
+        "tipo": "likert"
+    },
+    {
+        "id": "q14",
+        "pergunta": "Você se sente ansioso(a) durante mudanças, novas tarefas ou quando recebe feedback sobre seu desempenho no trabalho?",
+        "tipo": "likert"
+    },
+    {
+        "id": "q15",
+        "pergunta": "Você se sente angustiado(a) por não conseguir cumprir suas obrigações ou preocupado(a) excessivamente com o que os outros pensam sobre você no ambiente de trabalho?",
+        "tipo": "likert"
+    },
+    {
+        "id": "q16",
+        "pergunta": "Você sente que sua saúde mental está sendo afetada pelas demandas do trabalho?",
+        "tipo": "likert"
+    },
+    {
+        "id": "q17",
+        "pergunta": "Você se sente desmotivado(a), sem esperança ou que seu trabalho não tem significado/propósito?",
+        "tipo": "likert"
+    },
+    {
+        "id": "q18",
+        "pergunta": "Você se sente isolado(a) ou desconectado(a) dos seus colegas no trabalho?",
+        "tipo": "likert"
+    },
+    {
+        "id": "q19",
+        "pergunta": "Você questiona seu valor ou competência no ambiente de trabalho?",
+        "tipo": "likert"
+    },
+    {
+        "id": "q20",
+        "pergunta": "Você sente que suas necessidades emocionais não são atendidas no trabalho?",
+        "tipo": "likert"
+    }
+]
+
+escala_likert_opcoes = {
+    0: "Nunca",
+    1: "Raramente",
+    2: "Às vezes",
+    3: "Frequentemente",
+    4: "Sempre"
 }
 
-SPREADSHEET_ID = "1V2S5zWmcK8FkKIajZU5SrpSpbUp1gVO-RzQnxTAuLlg"
+# --- FUNÇÃO PARA ANALISAR AS RESPOSTAS E DAR FEEDBACK ---
+def analisar_respostas(respostas_do_usuario, questionario):
+    pontuacao_total = sum(respostas_do_usuario.values())
+    pontuacao_maxima = len(questionario) * 4
 
-# ========== CONEXÃO COM GOOGLE SHEETS ==========
-try:
-    # Configurar escopos
-    SCOPES = [
-        "https://www.googleapis.com/auth/spreadsheets",
-        "https://www.googleapis.com/auth/drive"
-    ]
-    
-    # Criar credenciais
-    creds = Credentials.from_service_account_info(SERVICE_ACCOUNT_INFO, scopes=SCOPES)
-    client = gspread.authorize(creds)
-    
-    # Abrir planilha
-    spreadsheet = client.open_by_key(SPREADSHEET_ID)
-    worksheet = spreadsheet.worksheet("Tabela Gemini")
-    
-    # Mensagem de sucesso na sidebar
-    st.sidebar.success("✅ Conectado ao Google Sheets!")
-    st.sidebar.info(f"Planilha: {spreadsheet.title}")
-    st.sidebar.info(f"Aba: {worksheet.title}")
-    st.sidebar.info(f"Total de respostas: {len(worksheet.get_all_values()) - 1}")
+    st.subheader("Análise Inicial das Suas Respostas")
+    st.write(f"Sua pontuação total é: {pontuacao_total} (de um máximo de {pontuacao_maxima})")
 
-except Exception as e:
-    st.sidebar.error("🔴 Erro de conexão!")
-    st.error(f"Falha ao conectar com o Google Sheets: {str(e)}")
-    st.code(traceback.format_exc())
-    st.stop()
-
-# ========== DESIGN DO QUESTIONÁRIO ==========
-# Configuração da página
-st.set_page_config(
-    page_title="Questionário de Satisfação",
-    page_icon="📋",
-    layout="centered",
-    initial_sidebar_state="expanded"
-)
-
-# Cabeçalho com imagem
-st.image("https://cdn.pixabay.com/photo/2016/11/30/20/44/survey-1874664_1280.png", 
-         width=100, caption="Sua opinião é importante!")
-st.title("📋 Questionário de Satisfação")
-st.markdown("""
-    <style>
-        .css-18e3th9 {padding: 2rem 1rem 10rem;}
-        .st-b7 {background-color: #f0f2f6;}
-        .st-c0 {background-color: white;}
-        .css-1v3fvcr {margin-top: -50px;}
-        .stButton>button {
-            background-color: #4CAF50;
-            color: white;
-            border-radius: 5px;
-            padding: 10px 24px;
-            font-size: 16px;
-        }
-        .stTextInput>div>div>input, .stTextArea>div>div>textarea {
-            border-radius: 5px;
-            border: 1px solid #ddd;
-        }
-    </style>
-""", unsafe_allow_html=True)
-
-st.markdown("""
-    **Preencha este breve questionário para nos ajudar a melhorar nossos serviços.**
-    Sua opinião é valiosa e será mantida em sigilo.
-""")
-
-# Formulário organizado em seções
-with st.form("questionario_form", clear_on_submit=True):
-    # Seção 1: Informações Pessoais
-    st.subheader("🔒 Informações Pessoais")
-    col1, col2 = st.columns(2)
-    with col1:
-        nome = st.text_input("Nome completo*", placeholder="Seu nome completo")
-    with col2:
-        email = st.text_input("Email*", placeholder="seu@email.com")
-    
-    # Seção 2: Avaliação
-    st.subheader("⭐ Avaliação do Serviço")
-    st.markdown("Como você avalia nossa prestação de serviço?")
-    
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        atendimento = st.slider("Atendimento", 1, 5, 3)
-    with col2:
-        qualidade = st.slider("Qualidade", 1, 5, 3)
-    with col3:
-        tempo_resposta = st.slider("Tempo de resposta", 1, 5, 3)
-    
-    # Seção 3: Comentários
-    st.subheader("💬 Comentários e Sugestões")
-    comentario = st.text_area(
-        "Tem alguma sugestão ou observação? Nos conte!",
-        placeholder="O que podemos fazer para melhorar?",
-        height=150
-    )
-    
-    # Termos e condições
-    st.markdown("---")
-    aceito = st.checkbox("Declaro que as informações fornecidas são verdadeiras*")
-    
-    # Notas
-    st.caption("\* Campos obrigatórios")
-    
-    # Botão de envio centralizado
-    st.markdown("<div style='text-align: center;'>", unsafe_allow_html=True)
-    enviado = st.form_submit_button("Enviar Minhas Respostas", use_container_width=True)
-    st.markdown("</div>", unsafe_allow_html=True)
-
-# Processar envio
-if enviado:
-    # Validar campos obrigatórios
-    erros = []
-    if not nome: erros.append("Nome completo")
-    if not email: erros.append("Email")
-    if not aceito: erros.append("Aceite dos termos")
-    
-    if erros:
-        st.error(f"Por favor, preencha os campos obrigatórios: {', '.join(erros)}")
+    if pontuacao_total <= 20:
+        st.success("As suas respostas indicam que raramente ou nunca sente ansiedade ou angústia relacionadas com o trabalho. Isso é um bom sinal de bem-estar!")
+        st.info("Continue atento(a) ao seu equilíbrio e procure manter hábitos saudáveis.")
+    elif pontuacao_total <= 45:
+        st.warning("As suas respostas sugerem que ocasionalmente experiencia ansiedade ou angústia no trabalho.")
+        st.info("É importante observar esses sentimentos e considerar algumas estratégias para gerir o stress, como exercícios físicos, técnicas de relaxamento ou pausas no trabalho.")
+    elif pontuacao_total <= 65:
+        st.error("As suas respostas indicam que frequentemente sente ansiedade ou angústia no trabalho, com algum impacto na sua rotina.")
+        st.info("Recomendamos que preste mais atenção a esses sinais. Conversar com um amigo de confiança, um familiar ou um líder no trabalho pode ser um bom primeiro passo. **Considerar o apoio de um profissional de saúde mental também seria muito benéfico.**")
     else:
-        with st.spinner("Salvando suas respostas..."):
-            try:
-                # Preparar dados
-                timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                nova_linha = [
-                    timestamp, 
-                    nome, 
-                    email, 
-                    atendimento, 
-                    qualidade, 
-                    tempo_resposta, 
-                    comentario
-                ]
-                
-                # Salvar na planilha
-                worksheet.append_row(nova_linha)
-                
-                # Mensagem de sucesso
-                st.success("✅ Respostas salvas com sucesso! Obrigado pela sua contribuição.")
-                st.balloons()
-                
-                # Atualizar sidebar
-                st.sidebar.info(f"Total de respostas: {len(worksheet.get_all_values()) - 1}")
-                
-                # Mensagem adicional
-                st.markdown("""
-                    <div style="background-color:#e6f7ff; padding:20px; border-radius:10px; margin-top:20px;">
-                        <h3>🎁 Agradecimento Especial!</h3>
-                        <p>Como forma de agradecimento, gostaríamos de oferecer:</p>
-                        <ul>
-                            <li>Desconto de 10% em seu próximo serviço</li>
-                            <li>Acesso antecipado a novos recursos</li>
-                        </ul>
-                        <p>Enviaremos os detalhes para o email fornecido.</p>
-                    </div>
-                """, unsafe_allow_html=True)
-                
-            except Exception as e:
-                st.error(f"❌ Erro ao salvar respostas: {str(e)}")
-                st.code(traceback.format_exc())
+        st.error("As suas respostas indicam um nível significativo e frequente de ansiedade e angústia relacionadas com o trabalho, impactando diversas áreas da sua vida.")
+        st.info("**Recomendamos vivamente que procure um profissional de saúde mental** para uma avaliação mais aprofundada e apoio adequado. Não hesite em procurar ajuda.")
 
-# Rodapé
+    st.markdown("---")
+    st.subheader("Observações com base em respostas específicas:")
+    if respostas_do_usuario.get('q6', 0) >= 3:
+        st.write("- A intensidade da sua ansiedade é um ponto de atenção importante.")
+    if respostas_do_usuario.get('q7', 0) >= 3:
+        st.write("- Os sintomas físicos que descreveu são comuns na ansiedade e merecem atenção.")
+    if respostas_do_usuario.get('q11', 0) >= 3:
+        st.write("- A dificuldade em dormir é um sinal significativo e pode estar relacionada com as suas preocupações.")
+    if respostas_do_usuario.get('q16', 0) >= 3:
+        st.write("- Sentir que a saúde mental é afetada pelas exigências do trabalho é um sinal claro de que algo precisa ser ajustado.")
+    if respostas_do_usuario.get('q17', 0) >= 3:
+        st.write("- A desmotivação ou a sensação de falta de propósito no trabalho podem indicar burnout ou esgotamento.")
+
+    st.markdown("---")
+    st.info("Lembre-se: Esta é uma análise inicial baseada nas suas respostas e não substitui uma avaliação profissional. Se estiver a passar por dificuldades, procure sempre um especialista.")
+
+    return pontuacao_total
+
+# --- FUNÇÃO PARA GUARDAR AS RESPOSTAS NO GOOGLE SHEETS (VERSÃO CORRIGIDA E FINAL) ---
+def salvar_respostas_no_sheets(respostas_do_usuario, pontuacao_total):
+    try:
+        creds = Credentials.from_service_account_info(
+            st.secrets["gcp_service_account"],
+            scopes=['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
+        )
+        client = gspread.authorize(creds)
+        spreadsheet = client.open_by_key(st.secrets["spreadsheet_id"])
+        
+        try:
+            sheet = spreadsheet.worksheet("Tabela Gemini")
+        except gspread.exceptions.WorksheetNotFound:
+            st.error("ERRO: Não foi possível encontrar a aba chamada 'Tabela Gemini'. Verifique se o nome está exatamente correto.")
+            try:
+                available_sheets = [s.title for s in spreadsheet.worksheets()]
+                st.error(f"As abas disponíveis neste ficheiro são: {available_sheets}")
+            except Exception as list_e:
+                st.error(f"Não foi possível listar as abas disponíveis: {list_e}")
+            return
+
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        linha_dados = [timestamp]
+        
+        for i in range(1, 21):
+            key = f'q{i}'
+            linha_dados.append(respostas_do_usuario.get(key, ''))
+        
+        linha_dados.append(pontuacao_total)
+
+        sheet.append_row(linha_dados)
+        st.success("Respostas guardadas com sucesso para análise interna!")
+        
+    except gspread.exceptions.SpreadsheetNotFound:
+        st.error("ERRO: A planilha não foi encontrada. Verifique se o ID da planilha está correto e se você partilhou a planilha com o email do service account.")
+    except Exception as e:
+        st.error("Ocorreu um erro inesperado ao guardar as suas respostas.")
+        st.error(f"Detalhes do erro: {e}")
+        traceback.print_exc()
+
+# --- LÓGICA DO APLICATIVO STREAMLIT ---
+st.title("Questionário Inicial de Avaliação de Ansiedade e Angústia")
+st.write("Por favor, responda às seguintes perguntas de acordo com a sua experiência nas **últimas duas semanas**.")
 st.markdown("---")
-st.markdown("""
-    <div style="text-align: center; color: gray; font-size: 0.9em;">
-        <p>© 2023 IPSI Questionário | Todos os direitos reservados</p>
-        <p>As informações fornecidas serão usadas apenas para melhorar nossos serviços</p>
-    </div>
-""", unsafe_allow_html=True)
+st.write("**Utilize a escala de 0 a 4, onde:**")
+for valor, texto in escala_likert_opcoes.items():
+    st.write(f"- **{valor}** = {texto}")
+st.markdown("---")
+
+if 'respostas' not in st.session_state:
+    st.session_state.respostas = {}
+
+for i, item_pergunta in enumerate(questionario):
+    pergunta_id = item_pergunta["id"]
+    pergunta_texto = item_pergunta["pergunta"]
+    
+    resposta_selecionada = st.radio(
+        f"{i+1}. {pergunta_texto}",
+        options=list(escala_likert_opcoes.keys()),
+        format_func=lambda x: escala_likert_opcoes[x],
+        key=f"q_{pergunta_id}",
+        horizontal=True
+    )
+    st.session_state.respostas[pergunta_id] = resposta_selecionada
+
+if st.button("Obter Análise e Guardar Respostas"):
+    pontuacao = analisar_respostas(st.session_state.respostas, questionario)
+    if pontuacao is not None:
+        salvar_respostas_no_sheets(st.session_state.respostas, pontuacao)
