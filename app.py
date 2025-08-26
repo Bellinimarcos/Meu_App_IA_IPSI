@@ -1,10 +1,10 @@
 import streamlit as st
-import pandas as pd
 import gspread
 from google.oauth2.service_account import Credentials
 from datetime import datetime
 import json
 import traceback
+import base64
 
 # --- DEFINIÇÃO DO QUESTIONÁRIO E DA ESCALA DE LIKERT ---
 questionario = [
@@ -157,28 +157,39 @@ def analisar_respostas(respostas_do_usuario, questionario):
 
     return pontuacao_total
 
-# --- FUNÇÃO PARA GUARDAR AS RESPOSTAS NO GOOGLE SHEETS (VERSÃO CORRIGIDA E FINAL) ---
+# --- FUNÇÃO PARA GUARDAR AS RESPOSTAS NO GOOGLE SHEETS ---
 def salvar_respostas_no_sheets(respostas_do_usuario, pontuacao_total):
     try:
-        # Tenta ler a chave gcp_service_account do secrets.toml
+        # CORREÇÃO APLICADA AQUI:
+        # Este bloco agora lê cada segredo individualmente,
+        # que é o formato correto do seu ficheiro secrets.toml.
+        gcp_service_account_info = {
+            "type": st.secrets["GCP_TYPE"],
+            "project_id": st.secrets["GCP_PROJECT_ID"],
+            "private_key_id": st.secrets["GCP_PRIVATE_KEY_ID"],
+            "private_key": base64.b64decode(st.secrets["GCP_PRIVATE_KEY_BASE64"]).decode('utf-8'),
+            "client_email": st.secrets["GCP_CLIENT_EMAIL"],
+            "client_id": st.secrets["GCP_CLIENT_ID"],
+            "auth_uri": st.secrets["GCP_AUTH_URI"],
+            "token_uri": st.secrets["GCP_TOKEN_URI"],
+            "auth_provider_x509_cert_url": st.secrets["GCP_AUTH_PROVIDER_X509_CERT_URL"],
+            "client_x509_cert_url": st.secrets["GCP_CLIENT_X509_CERT_URL"],
+            "universe_domain": st.secrets["GCP_UNIVERSE_DOMAIN"]
+        }
+        
         creds = Credentials.from_service_account_info(
-            st.secrets["gcp_service_account"],
+            gcp_service_account_info,
             scopes=['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
         )
         client = gspread.authorize(creds)
-        
-        # Tenta ler a chave spreadsheet_id do secrets.toml
-        spreadsheet = client.open_by_key(st.secrets["spreadsheet_id"])
+        spreadsheet = client.open_by_key(st.secrets["SPREADSHEET_ID"])
         
         try:
+            # Apontando para a aba correta "Tabela Gemini"
             sheet = spreadsheet.worksheet("Tabela Gemini")
+
         except gspread.exceptions.WorksheetNotFound:
             st.error("ERRO: Não foi possível encontrar a aba chamada 'Tabela Gemini'. Verifique se o nome está exatamente correto.")
-            try:
-                available_sheets = [s.title for s in spreadsheet.worksheets()]
-                st.error(f"As abas disponíveis neste ficheiro são: {available_sheets}")
-            except Exception as list_e:
-                st.error(f"Não foi possível listar as abas disponíveis: {list_e}")
             return
 
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -190,6 +201,7 @@ def salvar_respostas_no_sheets(respostas_do_usuario, pontuacao_total):
         
         linha_dados.append(pontuacao_total)
 
+        # Usando a linha de dados original do questionário
         sheet.append_row(linha_dados)
         st.success("Respostas guardadas com sucesso para análise interna!")
         
@@ -229,4 +241,3 @@ if st.button("Obter Análise e Guardar Respostas"):
     pontuacao = analisar_respostas(st.session_state.respostas, questionario)
     if pontuacao is not None:
         salvar_respostas_no_sheets(st.session_state.respostas, pontuacao)
-
